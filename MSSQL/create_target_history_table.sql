@@ -9,8 +9,10 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 -- REPLACE <db_owner> WITH OWNER NAME
--- REPLACE <table_name> WITH IMPORT TABLE NAME
+-- REPLACE <table_name> WITH TARGET HISTORY TABLE NAME
 CREATE TABLE [<db_owner>.[<table_name>](
+    [nvd_db_history_id] [bigint] IDENTITY(1,1) NOT NULL,
+	[nvd_db_id] [bigint] NULL,
 	[object_filename] [varchar](50) NULL,
 	[object_download_datetime] [datetime] NULL,
 	[item_cve_data_type] [varchar](50) NULL,
@@ -55,6 +57,10 @@ CREATE TABLE [<db_owner>.[<table_name>](
 	[impact_v2_confidentiality_impact] [varchar](50) NULL,
 	[impact_v2_integrity_impact] [varchar](50) NULL,
 	[impact_v2_availability_impact] [varchar](50) NULL,
-	[impact_v2_base_score] [numeric](4, 2) NULL
+	[impact_v2_base_score] [numeric](4, 2) NULL,
+	[nvd_db_import_datetime] [datetime] NULL
 ) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+ALTER TABLE [dbo].[nvd_db_history] ADD  CONSTRAINT [DF_nvd_db_history_nvd_db_import_datetime]  DEFAULT (getdate()) FOR [nvd_db_import_datetime]
 GO
