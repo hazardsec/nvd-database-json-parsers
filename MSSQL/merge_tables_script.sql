@@ -1,13 +1,13 @@
 -- REPLACE <db_name> WITH EXISTING DATABASE NAME
-DECLARE @db_name varchar(100) = '<db_name>';
+DECLARE @db_name nvarchar(MAX) = '<db_name>';
 -- REPLACE <db_owner> WITH EXISTING OWNER NAME
-DECLARE @db_owner varchar(100) = '<db_owner>';
+DECLARE @db_owner nvarchar(MAX) = '<db_owner>';
 -- REPLACE <target_table_name> WITH EXISTING TARGET TABLE NAME
-DECLARE @import_table_name varchar(100) = '<table_name>'
+DECLARE @target_table_name nvarchar(MAX) = '<table_name>'
 -- REPLACE <import_table_name> WITH EXISTING IMPORT TABLE NAME
-DECLARE @import_table_name varchar(100) = '<table_name>'
+DECLARE @import_table_name nvarchar(MAX) = '<table_name>'
 
-DECLARE @query [nvarchar](MAX) = N'MERGE [' + @db_name + '].[' + @db_owner + '].[' + @target_table_name + '] AS target_table
+DECLARE @query_part_1 nvarchar(MAX) = N'MERGE [' + @db_name + '].[' + @db_owner + '].[' + @target_table_name + '] AS target_table
 USING [' + @db_name + '].[' + @db_owner + '].[' + @import_table_name + '] AS source_table
 	ON target_table.item_cve_data_meta_id = source_table.item_cve_data_meta_id
 WHEN MATCHED THEN 
@@ -22,6 +22,7 @@ WHEN MATCHED THEN
 	,target_table.item_cve_references = source_table.item_cve_references
 	,target_table.item_cve_primary_description = source_table.item_cve_primary_description
 	,target_table.item_cve_description = source_table.item_cve_description
+	,target_table.item_impact = source_table.item_impact
 	,target_table.item_configurations = source_table.item_configurations
 	,target_table.item_published_datetime = source_table.item_published_datetime
 	,target_table.item_modified_datetime = source_table.item_modified_datetime
@@ -31,7 +32,7 @@ WHEN MATCHED THEN
 	,target_table.impact_v3_vector_string = source_table.impact_v3_vector_string
 	,target_table.impact_v3_attack_vector = source_table.impact_v3_attack_vector
 	,target_table.impact_v3_attack_complexity = source_table.impact_v3_attack_complexity
-	,target_table.impact_v3_priveleges_required = source_table.impact_v3_priveleges_required
+	,target_table.impact_v3_privileges_required = source_table.impact_v3_privileges_required
 	,target_table.impact_v3_user_interaction = source_table.impact_v3_user_interaction
 	,target_table.impact_v3_scope = source_table.impact_v3_scope
 	,target_table.impact_v3_confidentiality_impact = source_table.impact_v3_confidentiality_impact
@@ -54,8 +55,9 @@ WHEN MATCHED THEN
 	,target_table.impact_v2_confidentiality_impact = source_table.impact_v2_confidentiality_impact
 	,target_table.impact_v2_integrity_impact = source_table.impact_v2_integrity_impact
 	,target_table.impact_v2_availability_impact = source_table.impact_v2_availability_impact
-	,target_table.impact_v2_base_score = source_table.impact_v2_base_score
-WHEN NOT MATCHED BY TARGET THEN INSERT (
+	,target_table.impact_v2_base_score = source_table.impact_v2_base_score '
+DECLARE @query_part_2 nvarchar(MAX) = N'
+	WHEN NOT MATCHED BY TARGET THEN INSERT (
        [object_filename]
       ,[object_download_datetime]
 	  ,[item_cve_data_type]
@@ -68,6 +70,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
 	  ,[item_cve_primary_description]
       ,[item_cve_description]
       ,[item_configurations]
+	  ,[item_impact]
       ,[item_published_datetime]
       ,[item_modified_datetime]
 	  ,[impact_v3_exploitability_score]
@@ -76,7 +79,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
       ,[impact_v3_vector_string]
       ,[impact_v3_attack_vector]
       ,[impact_v3_attack_complexity]
-      ,[impact_v3_priveleges_required]
+      ,[impact_v3_privileges_required]
       ,[impact_v3_user_interaction]
       ,[impact_v3_scope]
       ,[impact_v3_confidentiality_impact]
@@ -113,6 +116,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
 	  ,[item_cve_primary_description]
       ,[item_cve_description]
       ,[item_configurations]
+	  ,[item_impact]
       ,[item_published_datetime]
       ,[item_modified_datetime]
 	  ,[impact_v3_exploitability_score]
@@ -121,7 +125,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
       ,[impact_v3_vector_string]
       ,[impact_v3_attack_vector]
       ,[impact_v3_attack_complexity]
-      ,[impact_v3_priveleges_required]
+      ,[impact_v3_privileges_required]
       ,[impact_v3_user_interaction]
       ,[impact_v3_scope]
       ,[impact_v3_confidentiality_impact]
@@ -148,4 +152,8 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
   )
 
 OUTPUT $ACTION, INSERTED.nvd_db_id, INSERTED.item_cve_data_meta_id;';
+
+DECLARE @query nvarchar(MAX) = @query_part_1 + @query_part_2
+
+PRINT(@query)
 EXEC sp_executesql @query;

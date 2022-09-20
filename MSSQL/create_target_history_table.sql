@@ -34,7 +34,7 @@ CREATE TABLE [<db_owner>.[<table_name>](
 	[impact_v3_vector_string] [varchar](50) NULL,
 	[impact_v3_attack_vector] [varchar](50) NULL,
 	[impact_v3_attack_complexity] [varchar](50) NULL,
-	[impact_v3_priveleges_required] [varchar](50) NULL,
+	[impact_v3_privileges_required] [varchar](50) NULL,
 	[impact_v3_user_interaction] [varchar](50) NULL,
 	[impact_v3_scope] [varchar](50) NULL,
 	[impact_v3_confidentiality_impact] [varchar](50) NULL,

@@ -11,25 +11,26 @@ DECLARE @file_path [varchar](MAX) = '<file_path>';
 DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @db_owner + '].[' + @table_name + '] (
        [object_filename]
       ,[object_download_datetime]
-	  ,[item_cve_data_type]
+	    ,[item_cve_data_type]
       ,[item_cve_data_format]
       ,[item_cve_data_version]
       ,[item_cve_data_meta_id]
       ,[item_cve_data_meta_assigner]
       ,[item_cve_problemtype]
       ,[item_cve_references]
-	  ,[item_cve_primary_description]
+	    ,[item_cve_primary_description]
       ,[item_cve_description]
       ,[item_configurations]
+      ,[item_impact]      
       ,[item_published_datetime]
       ,[item_modified_datetime]
-	  ,[impact_v3_exploitability_score]
+	    ,[impact_v3_exploitability_score]
       ,[impact_v3_impact_score]
       ,[impact_v3_version]
       ,[impact_v3_vector_string]
       ,[impact_v3_attack_vector]
       ,[impact_v3_attack_complexity]
-      ,[impact_v3_priveleges_required]
+      ,[impact_v3_privileges_required]
       ,[impact_v3_user_interaction]
       ,[impact_v3_scope]
       ,[impact_v3_confidentiality_impact]
@@ -56,25 +57,26 @@ DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @db_owner
 	)
   SELECT ''' + @file_name + ''' as [object_filename]
       ,REPLACE(REPLACE([object_download_datetime], ''Z'', ''''), ''T'', '' '')
-	  ,[item_cve_data_type]
+	    ,[item_cve_data_type]
       ,[item_cve_data_format]
       ,[item_cve_data_version]
       ,[item_cve_data_meta_id]
       ,[item_cve_data_meta_assigner]
       ,[item_cve_problemtype]
       ,[item_cve_references]
-	  ,[item_cve_primary_description]
+	    ,[item_cve_primary_description]
       ,[item_cve_description]
       ,[item_configurations]
+      ,[item_impact]
       ,REPLACE(REPLACE([item_published_datetime], ''Z'', ''''), ''T'', '' '')
       ,REPLACE(REPLACE([item_modified_datetime], ''Z'', ''''), ''T'', '' '')
-	  ,[impact_v3_exploitability_score]
+	    ,[impact_v3_exploitability_score]
       ,[impact_v3_impact_score]
       ,[impact_v3_version]
       ,[impact_v3_vector_string]
       ,[impact_v3_attack_vector]
       ,[impact_v3_attack_complexity]
-      ,[impact_v3_priveleges_required]
+      ,[impact_v3_privileges_required]
       ,[impact_v3_user_interaction]
       ,[impact_v3_scope]
       ,[impact_v3_confidentiality_impact]
@@ -125,7 +127,7 @@ DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @db_owner
 	 ,[impact_v3_vector_string] [varchar](50) ''$.impact.baseMetricV3.cvssV3.vectorString''
 	 ,[impact_v3_attack_vector] [varchar](50) ''$.impact.baseMetricV3.cvssV3.attackVector''
 	 ,[impact_v3_attack_complexity] [varchar](50) ''$.impact.baseMetricV3.cvssV3.attackComplexity''
-	 ,[impact_v3_priveleges_required] [varchar](50) ''$.impact.baseMetricV3.cvssV3.privilegesRequired''
+	 ,[impact_v3_privileges_required] [varchar](50) ''$.impact.baseMetricV3.cvssV3.privilegesRequired''
 	 ,[impact_v3_user_interaction] [varchar](50) ''$.impact.baseMetricV3.cvssV3.userInteraction''
 	 ,[impact_v3_scope] [varchar](50) ''$.impact.baseMetricV3.cvssV3.scope''
 	 ,[impact_v3_confidentiality_impact] [varchar](50) ''$.impact.baseMetricV3.cvssV3.confidentialityImpact''
