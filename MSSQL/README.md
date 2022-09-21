@@ -36,6 +36,6 @@ After importing the Modified file, update the target table (the persistent NVD d
 ### Truncate Import Table Again
 After importing the Modified file, truncate the import table by running the truncate_import_table.sql script after updating the placeholders referenced in the comments
 
-NOTE: Yearly files are updated daily (if updates required), Recent and Modified files are updated every hour or so by NVD as needed
+NOTE: NIST updates the NVD yearly files daily (if updates required), Recent and Modified files are updated every hour or so by NIST as needed
 
 TODO: Create script to automate and iterate through JSON files in a directory in the proper order and execute all scripts
