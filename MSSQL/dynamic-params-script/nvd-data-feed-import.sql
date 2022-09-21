@@ -253,7 +253,7 @@ IF $(incremental) = 1
         SET NOEXEC ON;
     END
 
-    DECLARE @year int = 1999
+    DECLARE @year int = 2002
 
     DECLARE @query_year_import nvarchar(MAX)
     DECLARE @query_year_import_part_1 nvarchar(MAX)
