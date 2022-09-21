@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+# PYTHON_ARGCOMPLETE_OK
+
+import argparse
+import requests
+import pandas as panda
+import gzip
+import inspect
+import sys
+import os
+import fnmatch
+import mmap
+import re
+import subprocess
+try: 
+    import argcomplete
+except ImportError: 
+    argcomplete = None
+import shutil
+import datetime
+
+parser = argparse.ArgumentParser(description="Program for automating NVD downloads and parsing")
+task_types_subparsers = parser.add_subparsers(help="Task Types or Sub-Command (type sub-command -h or --help for more info)", dest="task_type")
+download_parser = task_types_subparsers.add_parser("download", help="Task for downloading NVD JSON Data Feeds")
+download_options_group = download_parser.add_argument_group('Download Optional Modifiers')
+#download_subparsers = download_parser.add_subparsers(help="Download Actions", dest="download_action")
+download_options_group.add_argument("--incremental", dest="incremental", default=False, action="store_true", help="Only download the recent and modified NVD JSON Data Feeds")
+import_parser = task_types_subparsers.add_parser("import", help="Task for importing NVD JSON Data Feeds")
+import_options_group = import_parser.add_argument_group('Import Optional Modifiers')
+#import_subparsers = import_parser.add_subparsers(help="Import Actions", dest="import_action")
+import_options_group.add_argument("--use-defaults", dest="defaults", default=False, action="store_true", help="Use default values for import")
+import_options_group.add_argument("--incremental", dest="incremental", default=False, action="store_true", help="Only import the recent and modified NVD JSON Data Feeds")
+
+if argcomplete is not None:
+    argcomplete.autocomplete(parser)
+
+args = parser.parse_args()
+
+def download_feeds():
+    print("Hello world download!")
+    years = list(range(2002, datetime.date.today().year+1))
+    base_url = "https://nvd.nist.gov/feeds/json/cve/1.1/"
+    base_download_path = "./downloads/"
+    os.makedirs(os.path.dirname(base_download_path), exist_ok=True)
+    if not incremental:
+        for year in years:
+            file_name = "nvdcve-1.1-" + str(year) + ".json.gz"
+            file = requests.get(base_url + file_name)
+            
+            with open(base_download_path + file_name, "wb") as f:
+                f.write(file.content)
+
+    file_name = "nvdcve-1.1-recent.json.gz"
+    file = requests.get(base_url + file_name)
+    with open(base_download_path + file_name, "wb") as f:
+        f.write(file.content)
+
+    file_name = "nvdcve-1.1-modified.json.gz"
+    file = requests.get(base_url + file_name)
+    with open(base_download_path + file_name, "wb") as f:
+        f.write(file.content)
+
+def import_feeds():
+    print("Hello world import!")
+    years = list(range(2002, datetime.date.today().year+1))
+    base_download_path = "./downloads/"
+    if not incremental:
+        for year in years:
+            file_name = "nvdcve-1.1-" + str(year) + ".json.gz"
+            df = panda.read_json(base_download_path + file_name, compression='gzip')
+            print(df.tail())
+
+    file_name = "nvdcve-1.1-recent.json.gz"
+    df = panda.read_json(base_download_path + file_name, compression='gzip')
+    print(df.tail())
+
+    file_name = "nvdcve-1.1-modified.json.gz"
+    df = panda.read_json(base_download_path + file_name, compression='gzip')
+    print(df.tail())
+
+if __name__ == "__main__":
+    try:
+        params = {}
+        input_response = ""
+        use_defaults = False
+        incremental = False
+        if args.task_type == "download":
+  #          if args.download_action:
+            incremental = args.incremental
+        elif args.task_type == "import":
+ #           if args.import_action:
+            use_defaults = args.defaults
+            incremental = args.incremental
+        else:
+            print("Missing task type or sub-command for help use -h or --help!")
+        
+        method_name = args.task_type + "_feeds"
+        possibles = globals().copy()
+        possibles.update(locals())
+        method = possibles.get(method_name)
+        if not method:
+            raise NotImplementedError("Method %s not implemented" % method_name)                  
+        method()
+    except Exception as e:
+        # TODO: add logging code
+        raise
