@@ -1,14 +1,14 @@
 -- REPLACE <db_name> WITH EXISTING DATABASE NAME
 DECLARE @db_name nvarchar(MAX) = '<db_name>';
--- REPLACE <db_owner> WITH EXISTING OWNER NAME
-DECLARE @db_owner nvarchar(MAX) = '<db_owner>';
+-- REPLACE <schema_name> WITH EXISTING OWNER NAME
+DECLARE @schema_name nvarchar(MAX) = '<schema_name>';
 -- REPLACE <target_table_name> WITH EXISTING TARGET TABLE NAME
 DECLARE @target_table_name nvarchar(MAX) = '<table_name>'
 -- REPLACE <import_table_name> WITH EXISTING IMPORT TABLE NAME
 DECLARE @import_table_name nvarchar(MAX) = '<table_name>'
 
-DECLARE @query_part_1 nvarchar(MAX) = N'MERGE [' + @db_name + '].[' + @db_owner + '].[' + @target_table_name + '] AS target_table
-USING [' + @db_name + '].[' + @db_owner + '].[' + @import_table_name + '] AS source_table
+DECLARE @query_part_1 nvarchar(MAX) = N'MERGE [' + @db_name + '].[' + @schema_name + '].[' + @target_table_name + '] AS target_table
+USING [' + @db_name + '].[' + @schema_name + '].[' + @import_table_name + '] AS source_table
 	ON target_table.item_cve_data_meta_id = source_table.item_cve_data_meta_id
 WHEN MATCHED THEN 
 	UPDATE SET 

@@ -8,9 +8,9 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
--- REPLACE <db_owner> WITH OWNER NAME
+-- REPLACE <schema_name> WITH OWNER NAME
 -- REPLACE <table_name> WITH TARGET HISTORY TABLE NAME
-CREATE TABLE [<db_owner>].[<table_name>](
+CREATE TABLE [<schema_name>].[<table_name>](
     [nvd_db_history_id] [bigint] IDENTITY(1,1) NOT NULL,
 	[nvd_db_id] [bigint] NULL,
 	[object_filename] [varchar](50) NULL,

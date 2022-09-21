@@ -2,10 +2,10 @@
 USE [<db_name>]
 GO
 
--- REPLACE <db_owner> WITH OWNER NAME
+-- REPLACE <schema_name> WITH OWNER NAME
 -- REPLACE <history_table_name> WITH TARGET HISTORY TABLE NAME
 -- !!!! SEE MORE REPLACEMENTS BELOW INSERT !!!!
-INSERT INTO [<db_owner>].[<history_table_name>]
+INSERT INTO [<schema_name>].[<history_table_name>]
            ([nvd_db_id]
            ,[object_filename]
            ,[object_download_datetime]

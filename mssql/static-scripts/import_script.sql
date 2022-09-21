@@ -1,14 +1,14 @@
 -- REPLACE <db_name> WITH EXISTING DATABASE NAME
 DECLARE @db_name varchar(100) = '<db_name>';
--- REPLACE <db_owner> WITH EXISTING OWNER NAME
-DECLARE @db_owner varchar(100) = '<db_owner>';
+-- REPLACE <schema_name> WITH EXISTING OWNER NAME
+DECLARE @schema_name varchar(100) = '<schema_name>';
 -- REPLACE <table_name> WITH EXISTING TABLE NAME
 DECLARE @table_name varchar(100) = '<table_name>'
 -- REPLACE <file_name> WITH EXISTING NVD JSON FILE FILENAME (e.g. nvdcve-1.1-2002.json)
 DECLARE @file_name [varchar](500) = '<file_name>';
 -- REPLACE <file_path> WITH FILE PATH TO JSON FILE ABOVE (e.g. C:\Users\Username\Downloads\nvdcve-1.1-2002\)
 DECLARE @file_path [varchar](MAX) = '<file_path>';
-DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @db_owner + '].[' + @table_name + '] (
+DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @schema_name + '].[' + @table_name + '] (
        [object_filename]
       ,[object_download_datetime]
 	    ,[item_cve_data_type]
