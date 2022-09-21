@@ -1,4 +1,4 @@
-# Instructions for MSSQL Parser
+# Instructions for MSSQL Parser using Static Scripts
 
 ## Create Tables
 Create an import table, a target or persistent table, and a history table using the create_import_table.sql, create_target_table.sql, and create_target_history_table.sql files. You will need to follow the comments in each script to replace placeholders with the appropriate values for your environment.
@@ -37,5 +37,3 @@ After importing the Modified file, update the target table (the persistent NVD d
 After importing the Modified file, truncate the import table by running the truncate_import_table.sql script after updating the placeholders referenced in the comments
 
 NOTE: NIST updates the NVD yearly files daily (if updates required), Recent and Modified files are updated every hour or so by NIST as needed
-
-TODO: Create script to automate and iterate through JSON files in a directory in the proper order and execute all scripts
