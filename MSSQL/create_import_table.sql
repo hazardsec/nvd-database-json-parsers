@@ -10,7 +10,7 @@ GO
 
 -- REPLACE <db_owner> WITH OWNER NAME
 -- REPLACE <table_name> WITH IMPORT TABLE NAME
-CREATE TABLE [<db_owner>.[<table_name>](
+CREATE TABLE [<db_owner>].[<table_name>](
 	[object_filename] [varchar](50) NULL,
 	[object_download_datetime] [datetime] NULL,
 	[item_cve_data_type] [varchar](50) NULL,

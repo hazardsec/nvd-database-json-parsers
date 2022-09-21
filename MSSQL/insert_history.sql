@@ -52,8 +52,8 @@ INSERT INTO [<db_owner>].[<history_table_name>]
            ,[impact_v2_integrity_impact]
            ,[impact_v2_availability_impact]
            ,[impact_v2_base_score])
-     -- REPLACE <persistent_table_name> WITH TARGET HISTORY TABLE NAME           
-     SELECT * FROM <persistent_table_name>;
+     -- REPLACE <target_table_name> WITH TARGET TABLE NAME           
+     SELECT * FROM [<target_table_name>];
 GO
 
 
