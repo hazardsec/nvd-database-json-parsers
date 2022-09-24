@@ -41,6 +41,7 @@ DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @schema_n
       ,[impact_v2_severity]
       ,[impact_v2_exploitability_score]
       ,[impact_v2_impact_score]
+      ,[impact_v2_ac_insuf_info]
       ,[impact_v2_obtain_all_privilege]
       ,[impact_v2_obtain_user_privilege]
       ,[impact_v2_obtain_other_privilege]
@@ -87,6 +88,7 @@ DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @schema_n
       ,[impact_v2_severity]
       ,[impact_v2_exploitability_score]
       ,[impact_v2_impact_score]
+      ,[impact_v2_ac_insuf_info]
       ,[impact_v2_obtain_all_privilege]
       ,[impact_v2_obtain_user_privilege]
       ,[impact_v2_obtain_other_privilege]
@@ -138,6 +140,7 @@ DECLARE @query [nvarchar](MAX) = N'INSERT INTO [' + @db_name + '].[' + @schema_n
 	 ,[impact_v2_severity] [varchar](50) ''$.impact.baseMetricV2.severity''
 	 ,[impact_v2_exploitability_score] [numeric](4, 2) ''$.impact.baseMetricV2.exploitabilityScore''
 	 ,[impact_v2_impact_score] [numeric](4, 2) ''$.impact.baseMetricV2.impactScore''
+   ,[impact_v2_ac_insuf_info] [bit] ''$.impact.baseMetricV2.acInsufInfo''
 	 ,[impact_v2_obtain_all_privilege] [bit] ''$.impact.baseMetricV2.obtainAllPrivilege''
 	 ,[impact_v2_obtain_user_privilege] [bit] ''$.impact.baseMetricV2.obtainUserPrivilege''
 	 ,[impact_v2_obtain_other_privilege] [bit] ''$.impact.baseMetricV2.obtainOtherPrivilege''

@@ -43,6 +43,7 @@ CREATE TABLE [<schema_name>].[<table_name>](
 	[impact_v2_severity] [varchar](50) NULL,
 	[impact_v2_exploitability_score] [numeric](4, 2) NULL,
 	[impact_v2_impact_score] [numeric](4, 2) NULL,
+	[impact_v2_ac_insuf_info] [varchar](50) NULL,
 	[impact_v2_obtain_all_privilege] [varchar](50) NULL,
 	[impact_v2_obtain_user_privilege] [varchar](50) NULL,
 	[impact_v2_obtain_other_privilege] [varchar](50) NULL,

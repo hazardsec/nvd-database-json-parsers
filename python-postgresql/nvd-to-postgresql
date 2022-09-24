@@ -4,7 +4,8 @@
 import argparse
 from time import strftime
 import requests
-import pandas as panda
+import pandas as pd
+import numpy as np
 import pyodbc
 import json
 import gzip
@@ -67,7 +68,7 @@ def import_feeds():
     print("Hello world import!")
     years = list(range(2002, datetime.date.today().year+1))
     base_download_path = "./downloads/"
-    conn_str = (
+    cnxn_str = (
         "DRIVER={PostgreSQL ANSI};"
         "DATABASE=mgt516;"
         "UID=mgt516;"
@@ -75,11 +76,15 @@ def import_feeds():
         "SERVER=172.27.46.71;"
         "PORT=5432;"
         )
-    conn = pyodbc.connect(conn_str)
-    conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-    conn.setencoding(encoding='utf-8')
-    cursor = conn.cursor()
-    df_concat = panda.DataFrame()
+    cnxn = pyodbc.connect(cnxn_str)
+    cnxn.setencoding(encoding='utf-8')
+    cnxn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
+    cnxn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
+    cursor = cnxn.cursor()
+    df_concat = pd.DataFrame()
+    l0_fields = ["object_filename","object_download_datetime","configurations","impact","publishedDate","lastModifiedDate"]
+    l1_fields = ["cve.data_type","cve.data_format","cve.data_version","cve.problemtype","cve.references","cve.description"]
+    l3_fields = ["cve.CVE_data_meta.ID","cve.CVE_data_meta.ASSIGNER","impact.baseMetricV3.cvssV3.version","impact.baseMetricV3.cvssV3.vectorString","impact.baseMetricV3.cvssV3.attackVector","impact.baseMetricV3.cvssV3.attackComplexity","impact.baseMetricV3.cvssV3.privilegesRequired","impact.baseMetricV3.cvssV3.userInteraction","impact.baseMetricV3.cvssV3.scope","impact.baseMetricV3.cvssV3.confidentialityImpact","impact.baseMetricV3.cvssV3.integrityImpact","impact.baseMetricV3.cvssV3.availabilityImpact","impact.baseMetricV3.cvssV3.baseScore","impact.baseMetricV3.cvssV3.baseSeverity","impact.baseMetricV3.exploitabilityScore","impact.baseMetricV3.impactScore","impact.baseMetricV2.cvssV2.version","impact.baseMetricV2.cvssV2.vectorString","impact.baseMetricV2.cvssV2.accessVector","impact.baseMetricV2.cvssV2.accessComplexity","impact.baseMetricV2.cvssV2.authentication","impact.baseMetricV2.cvssV2.confidentialityImpact","impact.baseMetricV2.cvssV2.integrityImpact","impact.baseMetricV2.cvssV2.availabilityImpact","impact.baseMetricV2.cvssV2.baseScore","impact.baseMetricV2.severity","impact.baseMetricV2.exploitabilityScore","impact.baseMetricV2.impactScore","impact.baseMetricV2.acInsufInfo","impact.baseMetricV2.obtainAllPrivilege","impact.baseMetricV2.obtainUserPrivilege","impact.baseMetricV2.obtainOtherPrivilege","impact.baseMetricV2.userInteractionRequired"]
     if not incremental:
         for year in years:
             file_name = "nvdcve-1.1-" + str(year) + ".json.gz"
@@ -87,65 +92,136 @@ def import_feeds():
                 json_bytes = uf.read()
             json_str = json_bytes.decode("utf-8")
             json_dict = json.loads(json_str)
-            df = panda.json_normalize(json_dict, record_path="CVE_Items", meta=["CVE_data_type", "CVE_data_format"], max_level=1)
-            df["object_filename"] = file_name
-            df["object_download_datetime"] = datetime.date.today().strftime("%Y:%m:%d")    
-            df_impact = panda.json_normalize(json_dict, record_path="CVE_Items", meta=["CVE_data_type", "CVE_data_format"], max_level=3)
-            impact_fields = ["impact.baseMetricV2.cvssV2.version","impact.baseMetricV2.cvssV2.vectorString","impact.baseMetricV2.cvssV2.accessVector","impact.baseMetricV2.cvssV2.accessComplexity","impact.baseMetricV2.cvssV2.authentication","impact.baseMetricV2.cvssV2.confidentialityImpact","impact.baseMetricV2.cvssV2.integrityImpact","impact.baseMetricV2.cvssV2.availablityImpact","impact.baseMetricV2.cvssV2.baseScore","impact.baseMetricV2.severity","impact.baseMetricV2.exploitabilityScore","impact.baseMetricV2.impactScore","impact.baseMetricV2.acInsufInfo","impact.baseMetricV2.obtainAllPrivilege","impact.baseMetricV2.obtainUserPrivilege","impact.baseMetricV2.obtainOtherPrivilege","impact.baseMetricV2.userInteractionRequired","impact.baseMetricV3.cvssV3.version","impact.baseMetricV3.cvssV3.vectorString","impact.baseMetricV3.cvssV3.attackVector","impact.baseMetricV3.cvssV3.attackComplexity","impact.baseMetricV3.cvssV3.privilegesRequired","impact.baseMetricV3.cvssV3.userInteraction","impact.baseMetricV3.cvssV3.scope","impact.baseMetricV3.cvssV3.confidentialityImpact","impact.baseMetricV3.cvssV3.integrityImpact","impact.baseMetricV3.cvssV3.availabilityImpact","impact.baseMetricV3.cvssV3.baseScore","impact.baseMetricV3.cvssV3.baseSeverity","impact.baseMetricV3.exploitabilityScore","impact.baseMetricV3.impactScore"]
-            for column in impact_fields:
-                if column not in df_impact.columns:
-                    df_impact[column] = ""
 
-            df_concat = panda.concat([
+            df_l0 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=0)
+            df_l0["object_filename"] = file_name
+            df_l0["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")  
+
+            df_l1 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=1)
+
+            df_l3 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=3)
+            for column in l3_fields:
+                if column not in df_l3.columns:
+                    df_l3[column] = np.nan
+
+            df_all = pd.concat([
+                df_l0[l0_fields], 
+                df_l1[l1_fields],
+                df_l3[l3_fields]], axis=1)
+
+            df_concat = pd.concat([
                 df_concat, 
-                panda.concat([df,df_impact[impact_fields]], axis=1)
-            ])
+                df_all])
 
     file_name = "nvdcve-1.1-recent.json.gz"
     with gzip.open(base_download_path + file_name, 'r') as uf:
         json_bytes = uf.read()
     json_str = json_bytes.decode("utf-8")
     json_dict = json.loads(json_str)
-    df = panda.json_normalize(json_dict, record_path="CVE_Items", meta=["CVE_data_type", "CVE_data_format"], max_level=1)
-    df["object_filename"] = file_name
-    df["object_download_datetime"] = datetime.date.today().strftime("%Y:%m:%d")    
-    df_impact = panda.json_normalize(json_dict, record_path="CVE_Items", meta=["CVE_data_type", "CVE_data_format"], max_level=3)
-    with open(base_download_path + file_name + "-test.csv", "w") as f:
-        f.write(df_impact.head(100).to_csv())    
-    impact_fields = ["impact.baseMetricV2.cvssV2.version","impact.baseMetricV2.cvssV2.vectorString","impact.baseMetricV2.cvssV2.accessVector","impact.baseMetricV2.cvssV2.accessComplexity","impact.baseMetricV2.cvssV2.authentication","impact.baseMetricV2.cvssV2.confidentialityImpact","impact.baseMetricV2.cvssV2.integrityImpact","impact.baseMetricV2.cvssV2.availablityImpact","impact.baseMetricV2.cvssV2.baseScore","impact.baseMetricV2.severity","impact.baseMetricV2.exploitabilityScore","impact.baseMetricV2.impactScore","impact.baseMetricV2.acInsufInfo","impact.baseMetricV2.obtainAllPrivilege","impact.baseMetricV2.obtainUserPrivilege","impact.baseMetricV2.obtainOtherPrivilege","impact.baseMetricV2.userInteractionRequired","impact.baseMetricV3.cvssV3.version","impact.baseMetricV3.cvssV3.vectorString","impact.baseMetricV3.cvssV3.attackVector","impact.baseMetricV3.cvssV3.attackComplexity","impact.baseMetricV3.cvssV3.privilegesRequired","impact.baseMetricV3.cvssV3.userInteraction","impact.baseMetricV3.cvssV3.scope","impact.baseMetricV3.cvssV3.confidentialityImpact","impact.baseMetricV3.cvssV3.integrityImpact","impact.baseMetricV3.cvssV3.availabilityImpact","impact.baseMetricV3.cvssV3.baseScore","impact.baseMetricV3.cvssV3.baseSeverity","impact.baseMetricV3.exploitabilityScore","impact.baseMetricV3.impactScore"]
-    for column in impact_fields:
-        if column not in df_impact.columns:
-            df_impact[column] = ""
-
-    df_concat = panda.concat([
-        df_concat, 
-        panda.concat([df,df_impact[impact_fields]], axis=1)
-    ])
     
+    df_l0 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=0)
+    df_l0["object_filename"] = file_name
+    df_l0["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")    
+
+    df_l1 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=1)
+
+    df_l3 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=3)
+    for column in l3_fields:
+        if column not in df_l3.columns:
+            df_l3[column] = np.nan
+
+    df_all = pd.concat([
+        df_l0[l0_fields], 
+        df_l1[l1_fields],
+        df_l3[l3_fields]], axis=1)
+
+    df_concat = pd.concat([
+        df_concat, 
+        df_all])
+
     file_name = "nvdcve-1.1-modified.json.gz"
     with gzip.open(base_download_path + file_name, 'r') as uf:
         json_bytes = uf.read()
     json_str = json_bytes.decode("utf-8")
     json_dict = json.loads(json_str)
-    df = panda.json_normalize(json_dict, record_path="CVE_Items", meta=["CVE_data_type", "CVE_data_format"], max_level=1)
-    df["object_filename"] = file_name
-    df["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")    
-    df_impact = panda.json_normalize(json_dict, record_path="CVE_Items", meta=["CVE_data_type", "CVE_data_format"], max_level=3)
-    impact_fields = ["impact.baseMetricV2.cvssV2.version","impact.baseMetricV2.cvssV2.vectorString","impact.baseMetricV2.cvssV2.accessVector","impact.baseMetricV2.cvssV2.accessComplexity","impact.baseMetricV2.cvssV2.authentication","impact.baseMetricV2.cvssV2.confidentialityImpact","impact.baseMetricV2.cvssV2.integrityImpact","impact.baseMetricV2.cvssV2.availablityImpact","impact.baseMetricV2.cvssV2.baseScore","impact.baseMetricV2.severity","impact.baseMetricV2.exploitabilityScore","impact.baseMetricV2.impactScore","impact.baseMetricV2.acInsufInfo","impact.baseMetricV2.obtainAllPrivilege","impact.baseMetricV2.obtainUserPrivilege","impact.baseMetricV2.obtainOtherPrivilege","impact.baseMetricV2.userInteractionRequired","impact.baseMetricV3.cvssV3.version","impact.baseMetricV3.cvssV3.vectorString","impact.baseMetricV3.cvssV3.attackVector","impact.baseMetricV3.cvssV3.attackComplexity","impact.baseMetricV3.cvssV3.privilegesRequired","impact.baseMetricV3.cvssV3.userInteraction","impact.baseMetricV3.cvssV3.scope","impact.baseMetricV3.cvssV3.confidentialityImpact","impact.baseMetricV3.cvssV3.integrityImpact","impact.baseMetricV3.cvssV3.availabilityImpact","impact.baseMetricV3.cvssV3.baseScore","impact.baseMetricV3.cvssV3.baseSeverity","impact.baseMetricV3.exploitabilityScore","impact.baseMetricV3.impactScore"]
-    for column in impact_fields:
-        if column not in df_impact.columns:
-            df_impact[column] = ""
 
-    df_concat = panda.concat([
+    df_l0 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=0)
+    df_l0["object_filename"] = file_name
+    df_l0["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")    
+
+    df_l1 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=1)
+
+    df_l3 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=3)
+    for column in l3_fields:
+        if column not in df_l3.columns:
+            df_l3[column] = np.nan
+
+    df_all = pd.concat([
+        df_l0[l0_fields], 
+        df_l1[l1_fields],
+        df_l3[l3_fields]], axis=1)
+
+    df_concat = pd.concat([
         df_concat, 
-        panda.concat([df,df_impact[impact_fields]], axis=1)
-    ])
+        df_all])
+
+    #with open(base_download_path + file_name + "-test.json", "w") as f:
+    #    f.write(df_concat.tail(1428).to_json(orient="records"))
 
     df_concat = df_concat.reset_index(drop=True)
     df_concat.index.name = "id"
 
-    with open(base_download_path + file_name + "-tail.csv", "w") as f:
-        f.write(df_concat.head(100).to_csv())
+    cursor.execute("""INSERT INTO public.nvd_import 
+        SELECT j->>'object_filename' AS object_filename
+        ,TO_TIMESTAMP(j->>'object_download_datetime', 'YYYY-MM-DD') AS object_download_datetime
+        ,j->>'cve.data_type' AS item_cve_data_type
+        ,j->>'cve.data_format' AS item_cve_data_format
+        ,CAST(j->>'cve.data_version' AS DECIMAL) AS item_cve_data_version 
+        ,j->>'cve.CVE_data_meta.ID' AS item_cve_data_meta_id
+        ,j->>'cve.CVE_data_meta.ASSIGNER' AS item_cve_data_meta_assigner
+        ,j->'cve.problemtype' AS item_cve_problemtype
+        ,j->'cve.references' AS item_cve_references
+        ,j->'cve.description'->'description_data'->0->>'value' AS item_cve_primary_description
+        ,j->'cve.description' AS item_cve_description
+        ,j->'configurations' AS item_configuraitons
+        ,j->'impact' AS item_impact        
+        ,TO_TIMESTAMP(j->>'publishedDate', 'YYYY-MM-DDTHH24:MIZ') AS item_published_datetime 
+        ,TO_TIMESTAMP(j->>'lastModifiedDate', 'YYYY-MM-DDTHH24:MIZ') AS item_modified_datetime
+        ,CAST(j->>'impact.baseMetricV3.exploitabilityScore' AS DECIMAL) AS impact_v3_exploitability_score
+        ,CAST(j->>'impact.baseMetricV3.impactScore' AS DECIMAL) AS impact_v3_impact_score
+        ,CAST(j->>'impact.baseMetricV3.cvssV3.version' AS DECIMAL) AS item_v3_version
+        ,j->>'impact.baseMetricV3.cvssV3.vectorString' AS impact_v3_vector_sting
+        ,j->>'impact.baseMetricV3.cvssV3.attackVector' AS impact_v3_attack_vector
+        ,j->>'impact.baseMetricV3.cvssV3.attackComplexity' AS impact_v3_attack_complexity
+        ,j->>'impact.baseMetricV3.cvssV3.privilegesRequired' AS impact_v3_privileges_required
+        ,j->>'impact.baseMetricV3.cvssV3.userInteraction' AS impact_v3_user_interaction
+        ,j->>'impact.baseMetricV3.cvssV3.scope' AS impact_v3_scope
+        ,j->>'impact.baseMetricV3.cvssV3.confidentialityImpact' AS impact_v3_confidentiality_impact 
+        ,j->>'impact.baseMetricV3.cvssV3.integrityImpact' AS impact_v3_integrity_impact
+        ,j->>'impact.baseMetricV3.cvssV3.availabilityImpact' AS impact_v3_availability_impact
+        ,CAST(j->>'impact.baseMetricV3.cvssV3.baseScore' AS DECIMAL) AS impact_v3_base_score
+        ,j->>'impact.baseMetricV3.cvssV3.baseSeverity' AS impact_v3_base_severity
+        ,j->>'impact.baseMetricV2.severity' AS impact_v2_severity
+        ,CAST(NULLIF(j->>'impact.baseMetricV2.exploitabilityScore', '0.0') AS DECIMAL) AS impact_v2_exploitability_score
+        ,CAST(NULLIF(j->>'impact.baseMetricV2.impactScore', '0.0') AS DECIMAL) AS impact_v2_impact_score
+        ,j->>'impact.baseMetricV2.acInsufInfo' AS impact_v2_acinsufinfo
+        ,j->>'impact.baseMetricV2.obtainAllPrivilege' AS impact_v2_obtain_all_privilege
+        ,j->>'impact.baseMetricV2.obtainUserPrivilege' AS impact_v2_obtain_user_privilege
+        ,j->>'impact.baseMetricV2.obtainOtherPrivilege' AS impact_v2_obtain_other_privilege
+        ,j->>'impact.baseMetricV2.userInteractionRequired' AS impact_v2_user_interaction_required
+        ,CAST(NULLIF(j->>'impact.baseMetricV2.cvssV2.version', '0.0') AS DECIMAL) AS impact_v2_version
+        ,j->>'impact.baseMetricV2.cvssV2.vectorString' AS impact_v2_vector_string
+        ,j->>'impact.baseMetricV2.cvssV2.accessVector' AS impact_v2_access_vector
+        ,j->>'impact.baseMetricV2.cvssV2.accessComplexity' AS impact_v2_access_complexity
+        ,j->>'impact.baseMetricV2.cvssV2.authentication' AS impact_v2_authentication
+        ,j->>'impact.baseMetricV2.cvssV2.confidentialityImpact' AS impact_v2_confidentiality_impact
+        ,j->>'impact.baseMetricV2.cvssV2.integrityImpact' AS impact_v2_integrity_impact
+        ,j->>'impact.baseMetricV2.cvssV2.availabilityImpact' AS impact_v2_availability_impact
+        ,CAST(NULLIF(j->>'impact.baseMetricV2.cvssV2.baseScore', '0.0') AS DECIMAL) AS impact_v2_base_score        
+        From JSON_ARRAY_ELEMENTS(?) AS j """, df_concat.to_json(orient="records"))
+
+    cnxn.commit()
+    cnxn.close()
 
 if __name__ == "__main__":
     try:

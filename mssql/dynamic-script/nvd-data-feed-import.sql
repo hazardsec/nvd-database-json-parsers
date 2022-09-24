@@ -48,6 +48,7 @@ IF (EXISTS (SELECT *
             [impact_v2_severity] [varchar](50) NULL,
             [impact_v2_exploitability_score] [numeric](4, 2) NULL,
             [impact_v2_impact_score] [numeric](4, 2) NULL,
+            [impact_v2_ac_insuf_info] [varchar](50) NULL,
             [impact_v2_obtain_all_privilege] [varchar](50) NULL,
             [impact_v2_obtain_user_privilege] [varchar](50) NULL,
             [impact_v2_obtain_other_privilege] [varchar](50) NULL,
@@ -107,6 +108,7 @@ IF (EXISTS (SELECT *
             [impact_v2_severity] [varchar](50) NULL,
             [impact_v2_exploitability_score] [numeric](4, 2) NULL,
             [impact_v2_impact_score] [numeric](4, 2) NULL,
+            [impact_v2_ac_insuf_info] [varchar](50) NULL,
             [impact_v2_obtain_all_privilege] [varchar](50) NULL,
             [impact_v2_obtain_user_privilege] [varchar](50) NULL,
             [impact_v2_obtain_other_privilege] [varchar](50) NULL,
@@ -167,6 +169,7 @@ IF (EXISTS (SELECT *
             [impact_v2_severity] [varchar](50) NULL,
             [impact_v2_exploitability_score] [numeric](4, 2) NULL,
             [impact_v2_impact_score] [numeric](4, 2) NULL,
+            [impact_v2_ac_insuf_info] [varchar](50) NULL,
             [impact_v2_obtain_all_privilege] [varchar](50) NULL,
             [impact_v2_obtain_user_privilege] [varchar](50) NULL,
             [impact_v2_obtain_other_privilege] [varchar](50) NULL,
@@ -230,6 +233,7 @@ IF $(incremental) = 1
                 ,[impact_v2_severity]
                 ,[impact_v2_exploitability_score]
                 ,[impact_v2_impact_score]
+                ,[impact_v2_ac_insuf_info]
                 ,[impact_v2_obtain_all_privilege]
                 ,[impact_v2_obtain_user_privilege]
                 ,[impact_v2_obtain_other_privilege]
@@ -295,6 +299,7 @@ IF $(incremental) = 1
                 ,[impact_v2_severity]
                 ,[impact_v2_exploitability_score]
                 ,[impact_v2_impact_score]
+                ,[impact_v2_ac_insuf_info]
                 ,[impact_v2_obtain_all_privilege]
                 ,[impact_v2_obtain_user_privilege]
                 ,[impact_v2_obtain_other_privilege]
@@ -341,6 +346,7 @@ IF $(incremental) = 1
                 ,[impact_v2_severity]
                 ,[impact_v2_exploitability_score]
                 ,[impact_v2_impact_score]
+                ,[impact_v2_ac_insuf_info]
                 ,[impact_v2_obtain_all_privilege]
                 ,[impact_v2_obtain_user_privilege]
                 ,[impact_v2_obtain_other_privilege] 
@@ -393,6 +399,7 @@ IF $(incremental) = 1
             SET @query_year_import_part_3 = N',[impact_v2_severity] [varchar](50) ''$.impact.baseMetricV2.severity''
                 ,[impact_v2_exploitability_score] [numeric](4, 2) ''$.impact.baseMetricV2.exploitabilityScore''
                 ,[impact_v2_impact_score] [numeric](4, 2) ''$.impact.baseMetricV2.impactScore''
+                ,[impact_v2_ac_insuf_info] [bit] ''$.impact.baseMetricV2.acInsufInfo''
                 ,[impact_v2_obtain_all_privilege] [bit] ''$.impact.baseMetricV2.obtainAllPrivilege''
                 ,[impact_v2_obtain_user_privilege] [bit] ''$.impact.baseMetricV2.obtainUserPrivilege''
                 ,[impact_v2_obtain_other_privilege] [bit] ''$.impact.baseMetricV2.obtainOtherPrivilege''
@@ -449,6 +456,7 @@ IF $(incremental) = 1
             ,target_table.impact_v2_severity = source_table.impact_v2_severity
             ,target_table.impact_v2_exploitability_score = source_table.impact_v2_exploitability_score
             ,target_table.impact_v2_impact_score = source_table.impact_v2_impact_score
+            ,target_table.impact_v2_ac_insuf_info = source_table.impact_v2_ac_insuf_info
             ,target_table.impact_v2_obtain_all_privilege = source_table.impact_v2_obtain_all_privilege
             ,target_table.impact_v2_obtain_user_privilege = source_table.impact_v2_obtain_user_privilege
             ,target_table.impact_v2_obtain_other_privilege = source_table.impact_v2_obtain_other_privilege
@@ -495,6 +503,7 @@ IF $(incremental) = 1
             ,[impact_v2_severity]
             ,[impact_v2_exploitability_score]
             ,[impact_v2_impact_score]
+            ,[impact_v2_ac_insuf_info]
             ,[impact_v2_obtain_all_privilege]
             ,[impact_v2_obtain_user_privilege]
             ,[impact_v2_obtain_other_privilege]
@@ -541,6 +550,7 @@ IF $(incremental) = 1
             ,[impact_v2_severity]
             ,[impact_v2_exploitability_score]
             ,[impact_v2_impact_score]
+            ,[impact_v2_ac_insuf_info]
             ,[impact_v2_obtain_all_privilege]
             ,[impact_v2_obtain_user_privilege]
             ,[impact_v2_obtain_other_privilege]
@@ -602,6 +612,7 @@ SET @query_recent_import_part_1 = N'INSERT INTO [$(db_name)].[$(schema_name)].[$
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege]
@@ -648,6 +659,7 @@ SELECT ''$(file_name_prefix)recent.json'' as [object_filename]
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege] 
@@ -700,6 +712,7 @@ WITH (
 SET @query_recent_import_part_3 = N',[impact_v2_severity] [varchar](50) ''$.impact.baseMetricV2.severity''
     ,[impact_v2_exploitability_score] [numeric](4, 2) ''$.impact.baseMetricV2.exploitabilityScore''
     ,[impact_v2_impact_score] [numeric](4, 2) ''$.impact.baseMetricV2.impactScore''
+    ,[impact_v2_ac_insuf_info] [bit] ''$.impact.baseMetricV2.acInsufInfo''
     ,[impact_v2_obtain_all_privilege] [bit] ''$.impact.baseMetricV2.obtainAllPrivilege''
     ,[impact_v2_obtain_user_privilege] [bit] ''$.impact.baseMetricV2.obtainUserPrivilege''
     ,[impact_v2_obtain_other_privilege] [bit] ''$.impact.baseMetricV2.obtainOtherPrivilege''
@@ -753,6 +766,7 @@ WHEN MATCHED THEN
     ,target_table.impact_v2_severity = source_table.impact_v2_severity
     ,target_table.impact_v2_exploitability_score = source_table.impact_v2_exploitability_score
     ,target_table.impact_v2_impact_score = source_table.impact_v2_impact_score
+    ,target_table.impact_v2_ac_insuf_info = source_table.impact_v2_ac_insuf_info
     ,target_table.impact_v2_obtain_all_privilege = source_table.impact_v2_obtain_all_privilege
     ,target_table.impact_v2_obtain_user_privilege = source_table.impact_v2_obtain_user_privilege
     ,target_table.impact_v2_obtain_other_privilege = source_table.impact_v2_obtain_other_privilege
@@ -799,6 +813,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege]
@@ -845,6 +860,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege]
@@ -905,6 +921,7 @@ SET @query_modified_import_part_1 = N'INSERT INTO [$(db_name)].[$(schema_name)].
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege]
@@ -951,6 +968,7 @@ SELECT ''$(file_name_prefix)modified.json'' as [object_filename]
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege] 
@@ -1003,6 +1021,7 @@ WITH (
 SET @query_modified_import_part_3 = N',[impact_v2_severity] [varchar](50) ''$.impact.baseMetricV2.severity''
     ,[impact_v2_exploitability_score] [numeric](4, 2) ''$.impact.baseMetricV2.exploitabilityScore''
     ,[impact_v2_impact_score] [numeric](4, 2) ''$.impact.baseMetricV2.impactScore''
+    ,[impact_v2_ac_insuf_info] [bit] ''$.impact.baseMetricV2.acInsufInfo''
     ,[impact_v2_obtain_all_privilege] [bit] ''$.impact.baseMetricV2.obtainAllPrivilege''
     ,[impact_v2_obtain_user_privilege] [bit] ''$.impact.baseMetricV2.obtainUserPrivilege''
     ,[impact_v2_obtain_other_privilege] [bit] ''$.impact.baseMetricV2.obtainOtherPrivilege''
@@ -1056,6 +1075,7 @@ WHEN MATCHED THEN
     ,target_table.impact_v2_severity = source_table.impact_v2_severity
     ,target_table.impact_v2_exploitability_score = source_table.impact_v2_exploitability_score
     ,target_table.impact_v2_impact_score = source_table.impact_v2_impact_score
+    ,target_table.impact_v2_ac_insuf_info = source_table.impact_v2_ac_insuf_info
     ,target_table.impact_v2_obtain_all_privilege = source_table.impact_v2_obtain_all_privilege
     ,target_table.impact_v2_obtain_user_privilege = source_table.impact_v2_obtain_user_privilege
     ,target_table.impact_v2_obtain_other_privilege = source_table.impact_v2_obtain_other_privilege
@@ -1102,6 +1122,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege]
@@ -1148,6 +1169,7 @@ WHEN NOT MATCHED BY TARGET THEN INSERT (
     ,[impact_v2_severity]
     ,[impact_v2_exploitability_score]
     ,[impact_v2_impact_score]
+    ,[impact_v2_ac_insuf_info]
     ,[impact_v2_obtain_all_privilege]
     ,[impact_v2_obtain_user_privilege]
     ,[impact_v2_obtain_other_privilege]

@@ -43,6 +43,7 @@ WHEN MATCHED THEN
 	,target_table.impact_v2_severity = source_table.impact_v2_severity
 	,target_table.impact_v2_exploitability_score = source_table.impact_v2_exploitability_score
 	,target_table.impact_v2_impact_score = source_table.impact_v2_impact_score
+  ,target_table.impact_v2_ac_insuf_info = source_table.impact_v2_ac_insuf_info
 	,target_table.impact_v2_obtain_all_privilege = source_table.impact_v2_obtain_all_privilege
 	,target_table.impact_v2_obtain_user_privilege = source_table.impact_v2_obtain_user_privilege
 	,target_table.impact_v2_obtain_other_privilege = source_table.impact_v2_obtain_other_privilege
@@ -90,6 +91,7 @@ DECLARE @query_part_2 nvarchar(MAX) = N'
       ,[impact_v2_severity]
       ,[impact_v2_exploitability_score]
       ,[impact_v2_impact_score]
+      ,[impact_v2_ac_insuf_info]
       ,[impact_v2_obtain_all_privilege]
       ,[impact_v2_obtain_user_privilege]
       ,[impact_v2_obtain_other_privilege]
