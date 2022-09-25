@@ -2,6 +2,7 @@
 # PYTHON_ARGCOMPLETE_OK
 
 import argparse
+from sqlite3 import Cursor
 from time import strftime
 import requests
 import pandas as pd
@@ -9,119 +10,103 @@ import numpy as np
 import pyodbc
 import json
 import gzip
-import inspect
-import sys
 import os
-import fnmatch
-import mmap
-import re
-import subprocess
 try: 
     import argcomplete
 except ImportError: 
     argcomplete = None
-import shutil
 import datetime
 
 parser = argparse.ArgumentParser(description="Program for automating NVD downloads and parsing")
 task_types_subparsers = parser.add_subparsers(help="Task Types or Sub-Command (type sub-command -h or --help for more info)", dest="task_type")
+# Sub-commands
 download_parser = task_types_subparsers.add_parser("download", help="Task for downloading NVD JSON Data Feeds")
 download_options_group = download_parser.add_argument_group('Download Optional Modifiers')
-#download_subparsers = download_parser.add_subparsers(help="Download Actions", dest="download_action")
-download_options_group.add_argument("--incremental", dest="incremental", default=False, action="store_true", help="Only download the recent and modified NVD JSON Data Feeds")
 import_parser = task_types_subparsers.add_parser("import", help="Task for importing NVD JSON Data Feeds")
 import_options_group = import_parser.add_argument_group('Import Optional Modifiers')
-#import_subparsers = import_parser.add_subparsers(help="Import Actions", dest="import_action")
-import_options_group.add_argument("--use-defaults", dest="defaults", default=False, action="store_true", help="Use default values for import")
+
+# Sub-command options
+download_options_group.add_argument("--use-defaults", dest="download_defaults", default=False, action="store_true", help="Use default values for download")
+download_options_group.add_argument("--incremental", dest="incremental", default=False, action="store_true", help="Only download the recent and modified NVD JSON Data Feeds")
+download_options_group.add_argument("--import", dest="import_after_download", default=False, action="store_true", help="Import records after download")
+download_options_group.add_argument("--exclude-history", dest="exclude_history", default=False, action="store_true", help="Do not create history snapshot (ignored unless --import used)")
+download_options_group.add_argument("--delete-downloads", dest="delete_downloads", default=False, action="store_true", help="Deletes all downloaded NVD JSON files that match the path (ignored unless --import used)")
+import_options_group.add_argument("--use-defaults", dest="import_defaults", default=False, action="store_true", help="Use default values for import")
 import_options_group.add_argument("--incremental", dest="incremental", default=False, action="store_true", help="Only import the recent and modified NVD JSON Data Feeds")
+import_options_group.add_argument("--download", dest="download_before_import", default=False, action="store_true", help="Download records before import")
+import_options_group.add_argument("--exclude-history", dest="exclude_history", default=False, action="store_true", help="Do not create history snapshot")
+import_options_group.add_argument("--delete-downloads", dest="delete_downloads", default=False, action="store_true", help="Deletes all downloaded NVD JSON files that match the path")
 
 if argcomplete is not None:
     argcomplete.autocomplete(parser)
 
 args = parser.parse_args()
 
-def download_feeds():
-    print("Hello world download!")
-    years = list(range(2002, datetime.date.today().year+1))
-    base_url = "https://nvd.nist.gov/feeds/json/cve/1.1/"
-    base_download_path = "./downloads/"
-    os.makedirs(os.path.dirname(base_download_path), exist_ok=True)
+def fill_params(fill_type):
+    params = {}
+    #if use_defaults:
+    params["base_download_path"] = "./downloads/"
+    params["file_prefix"] = "nvdcve-1.1-"
+    params["file_suffix"] = ".json.gz"
+    params["base_url"] = "https://nvd.nist.gov/feeds/json/cve/1.1/"
+    params["tablespace"] = "pg_default"    
+    params["schema"] = "public"
+    params["db_owner"] = "nvd_importer"
+    params["import_table"] = "nvd_db_import"
+    params["target_table"] = "nvd_db"
+    params["history_table"] = "nvd_db_history"
+    #else:
+    if not use_defaults:
+        params["base_download_path"] = (input("Specify directory for the NVD JSON Data Feeds [" + params["base_download_path"] + "]:\n") or params["base_download_path"])
+        params["file_prefix"] = (input("Specify the file prefix for the data feeds [" + params["file_prefix"] + "]:\n") or params["file_prefix"])
+        params["file_suffix"] = (input("Specify the file suffix for the data feeds [" + params["file_suffix"] + "]:\n") or params["file_suffix"])
+    
+        if fill_type == "both" or fill_type == "download":
+            params["base_url"] = (input("Specify base url for data feeds [" + params["base_url"] + "]:\n") or params["base_url"])
+        
+        if fill_type == "both" or fill_type == "import":
+            params["tablespace"] = (input("Specify the tablespace to use [" + params["tablespace"] + "]:\n") or params["tablespace"])
+            params["schema"] = (input("Specify the schema to use [" + params["schema"] + "]:\n") or "public")
+            params["db_owner"] = (input("Specify the owner of the tables [" + params["db_owner"] + "]:\n") or "nvd_importer")
+            params["import_table"] = (input("Specify the import table name [" + params["import_table"] + "]:\n") or "nvd_db_import")
+            params["target_table"] = (input("Specify the main target table name [" + params["target_table"] + "]:\n") or "nvd_db")
+            params["history_table"] = (input("Specify the history table name for snapshots [" + params["history_table"] + "]:\n") or "nvd_db_history")        
+    
+    return params
+
+def download_file(base_url, base_path, file_name):
+    file = requests.get(base_url + file_name)
+    with open(base_path + file_name, "wb") as f:
+        f.write(file.content)
+
+def delete_files(params):
     if not incremental:
         for year in years:
-            file_name = "nvdcve-1.1-" + str(year) + ".json.gz"
-            file = requests.get(base_url + file_name)
-            
-            with open(base_download_path + file_name, "wb") as f:
-                f.write(file.content)
+            file_name = params["file_prefix"] + str(year) + params["file_suffix"]
+            if os.path.exists(params["base_download_path"] + file_name):
+                os.remove(params["base_download_path"] + file_name)
 
-    file_name = "nvdcve-1.1-recent.json.gz"
-    file = requests.get(base_url + file_name)
-    with open(base_download_path + file_name, "wb") as f:
-        f.write(file.content)
+    file_name = params["file_prefix"] + "recent" + params["file_suffix"]
+    if os.path.exists(params["base_download_path"] + file_name):
+        os.remove(params["base_download_path"] + file_name)
 
-    file_name = "nvdcve-1.1-modified.json.gz"
-    file = requests.get(base_url + file_name)
-    with open(base_download_path + file_name, "wb") as f:
-        f.write(file.content)
+    file_name = params["file_prefix"] + "modified" + params["file_suffix"]
+    if os.path.exists(params["base_download_path"] + file_name):
+        os.remove(params["base_download_path"] + file_name)
 
-def import_feeds():
-    print("Hello world import!")
-    years = list(range(2002, datetime.date.today().year+1))
-    base_download_path = "./downloads/"
-    cnxn_str = (
-        "DRIVER={PostgreSQL ANSI};"
-        "DATABASE=mgt516;"
-        "UID=mgt516;"
-        "PWD=<pass>;"
-        "SERVER=172.27.46.71;"
-        "PORT=5432;"
-        )
-    cnxn = pyodbc.connect(cnxn_str)
-    cnxn.setencoding(encoding='utf-8')
-    cnxn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-    cnxn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-    cursor = cnxn.cursor()
-    df_concat = pd.DataFrame()
+def parse_normalize_json(base_path, file_name):
     l0_fields = ["object_filename","object_download_datetime","configurations","impact","publishedDate","lastModifiedDate"]
     l1_fields = ["cve.data_type","cve.data_format","cve.data_version","cve.problemtype","cve.references","cve.description"]
     l3_fields = ["cve.CVE_data_meta.ID","cve.CVE_data_meta.ASSIGNER","impact.baseMetricV3.cvssV3.version","impact.baseMetricV3.cvssV3.vectorString","impact.baseMetricV3.cvssV3.attackVector","impact.baseMetricV3.cvssV3.attackComplexity","impact.baseMetricV3.cvssV3.privilegesRequired","impact.baseMetricV3.cvssV3.userInteraction","impact.baseMetricV3.cvssV3.scope","impact.baseMetricV3.cvssV3.confidentialityImpact","impact.baseMetricV3.cvssV3.integrityImpact","impact.baseMetricV3.cvssV3.availabilityImpact","impact.baseMetricV3.cvssV3.baseScore","impact.baseMetricV3.cvssV3.baseSeverity","impact.baseMetricV3.exploitabilityScore","impact.baseMetricV3.impactScore","impact.baseMetricV2.cvssV2.version","impact.baseMetricV2.cvssV2.vectorString","impact.baseMetricV2.cvssV2.accessVector","impact.baseMetricV2.cvssV2.accessComplexity","impact.baseMetricV2.cvssV2.authentication","impact.baseMetricV2.cvssV2.confidentialityImpact","impact.baseMetricV2.cvssV2.integrityImpact","impact.baseMetricV2.cvssV2.availabilityImpact","impact.baseMetricV2.cvssV2.baseScore","impact.baseMetricV2.severity","impact.baseMetricV2.exploitabilityScore","impact.baseMetricV2.impactScore","impact.baseMetricV2.acInsufInfo","impact.baseMetricV2.obtainAllPrivilege","impact.baseMetricV2.obtainUserPrivilege","impact.baseMetricV2.obtainOtherPrivilege","impact.baseMetricV2.userInteractionRequired"]
-    if not incremental:
-        for year in years:
-            file_name = "nvdcve-1.1-" + str(year) + ".json.gz"
-            with gzip.open(base_download_path + file_name, 'r') as uf:
-                json_bytes = uf.read()
-            json_str = json_bytes.decode("utf-8")
-            json_dict = json.loads(json_str)
 
-            df_l0 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=0)
-            df_l0["object_filename"] = file_name
-            df_l0["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")  
-
-            df_l1 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=1)
-
-            df_l3 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=3)
-            for column in l3_fields:
-                if column not in df_l3.columns:
-                    df_l3[column] = np.nan
-
-            df_all = pd.concat([
-                df_l0[l0_fields], 
-                df_l1[l1_fields],
-                df_l3[l3_fields]], axis=1)
-
-            df_concat = pd.concat([
-                df_concat, 
-                df_all])
-
-    file_name = "nvdcve-1.1-recent.json.gz"
-    with gzip.open(base_download_path + file_name, 'r') as uf:
+    with gzip.open(base_path + file_name, 'r') as uf:
         json_bytes = uf.read()
     json_str = json_bytes.decode("utf-8")
     json_dict = json.loads(json_str)
-    
+
     df_l0 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=0)
     df_l0["object_filename"] = file_name
-    df_l0["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")    
+    df_l0["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")  
 
     df_l1 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=1)
 
@@ -135,43 +120,283 @@ def import_feeds():
         df_l1[l1_fields],
         df_l3[l3_fields]], axis=1)
 
-    df_concat = pd.concat([
-        df_concat, 
-        df_all])
+    return df_all
 
-    file_name = "nvdcve-1.1-modified.json.gz"
-    with gzip.open(base_download_path + file_name, 'r') as uf:
-        json_bytes = uf.read()
-    json_str = json_bytes.decode("utf-8")
-    json_dict = json.loads(json_str)
+def conditional_create_clean_tables(params):
+    # Check if import table exists
+    cursor = cnxn.cursor()
+    cursor.execute("""DO $$
+        BEGIN
+            IF EXISTS (SELECT * FROM 
+                            pg_tables
+                        WHERE 
 
-    df_l0 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=0)
-    df_l0["object_filename"] = file_name
-    df_l0["object_download_datetime"] = datetime.date.today().strftime("%Y-%m-%d")    
+                            schemaname = '""" + params["schema"] + """' AND 
+                            tablename  = '""" + params["import_table"] + """') THEN
+                TRUNCATE TABLE """ + params["schema"] + """.""" + params["import_table"] + """;
+            ELSE
+                CREATE TABLE """ + params["schema"] + """.""" + params["import_table"] + """
+                (
+                    object_filename character varying(50) COLLATE pg_catalog."default",
+                    object_download_datetime timestamp without time zone,
+                    item_cve_data_type character varying(50) COLLATE pg_catalog."default",
+                    item_cve_data_format character varying(50) COLLATE pg_catalog."default",
+                    item_cve_data_version numeric(4,2),
+                    item_cve_data_meta_id character varying(50) COLLATE pg_catalog."default",
+                    item_cve_data_meta_assigner character varying(500) COLLATE pg_catalog."default",
+                    item_cve_problemtype jsonb,
+                    item_cve_references jsonb,
+                    item_cve_primary_description character varying(8000) COLLATE pg_catalog."default",
+                    item_cve_description jsonb,
+                    item_configurations jsonb,
+                    item_impact jsonb,
+                    item_published_datetime timestamp without time zone,
+                    item_modified_datetime timestamp without time zone,
+                    impact_v3_exploitability_score numeric(4,2),
+                    impact_v3_impact_score numeric(4,2),
+                    impact_v3_version numeric(4,2),
+                    impact_v3_vector_string character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_attack_vector character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_attack_complexity character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_privileges_required character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_user_interaction character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_scope character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_confidentiality_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_integrity_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_availability_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_base_score numeric(4,2),
+                    impact_v3_base_severity character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_severity character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_exploitability_score numeric(4,2),
+                    impact_v2_impact_score numeric(4,2),
+                    impact_v2_ac_insuf_info character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_obtain_all_privilege character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_obtain_user_privilege character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_obtain_other_privilege character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_user_interaction_required character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_version numeric(4,2),
+                    impact_v2_vector_string character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_access_vector character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_access_complexity character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_authentication character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_confidentiality_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_integrity_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_availability_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_base_score numeric(4,2)
+                )
 
-    df_l1 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=1)
+                TABLESPACE """ + params["tablespace"] + """;
 
-    df_l3 = pd.json_normalize(json_dict, record_path="CVE_Items", max_level=3)
-    for column in l3_fields:
-        if column not in df_l3.columns:
-            df_l3[column] = np.nan
+                ALTER TABLE IF EXISTS """ + params["schema"] + """.""" + params["import_table"] + """
+                    OWNER to """ + params["db_owner"] + """;
+            END IF;
+        END;
+        $$
+    """)
 
-    df_all = pd.concat([
-        df_l0[l0_fields], 
-        df_l1[l1_fields],
-        df_l3[l3_fields]], axis=1)
+    cnxn.commit()
 
-    df_concat = pd.concat([
-        df_concat, 
-        df_all])
+    cursor.execute("""DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM 
+                        pg_tables
+                    WHERE 
+                        schemaname = '""" + params["schema"] + """' AND 
+                        tablename  = '""" + params["target_table"] + """') THEN
+                CREATE TABLE """ + params["schema"] + """.""" + params["target_table"] + """
+                (
+                    """ + params["target_table"] + """_id INT GENERATED ALWAYS AS IDENTITY,
+                    object_filename character varying(50) COLLATE pg_catalog."default",
+                    object_download_datetime timestamp without time zone,
+                    item_cve_data_type character varying(50) COLLATE pg_catalog."default",
+                    item_cve_data_format character varying(50) COLLATE pg_catalog."default",
+                    item_cve_data_version numeric(4,2),
+                    item_cve_data_meta_id character varying(50) COLLATE pg_catalog."default",
+                    item_cve_data_meta_assigner character varying(500) COLLATE pg_catalog."default",
+                    item_cve_problemtype jsonb,
+                    item_cve_references jsonb,
+                    item_cve_primary_description character varying(8000) COLLATE pg_catalog."default",
+                    item_cve_description jsonb,
+                    item_configurations jsonb,
+                    item_impact jsonb,
+                    item_published_datetime timestamp without time zone,
+                    item_modified_datetime timestamp without time zone,
+                    impact_v3_exploitability_score numeric(4,2),
+                    impact_v3_impact_score numeric(4,2),
+                    impact_v3_version numeric(4,2),
+                    impact_v3_vector_string character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_attack_vector character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_attack_complexity character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_privileges_required character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_user_interaction character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_scope character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_confidentiality_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_integrity_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_availability_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v3_base_score numeric(4,2),
+                    impact_v3_base_severity character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_severity character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_exploitability_score numeric(4,2),
+                    impact_v2_impact_score numeric(4,2),
+                    impact_v2_ac_insuf_info character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_obtain_all_privilege character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_obtain_user_privilege character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_obtain_other_privilege character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_user_interaction_required character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_version numeric(4,2),
+                    impact_v2_vector_string character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_access_vector character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_access_complexity character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_authentication character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_confidentiality_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_integrity_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_availability_impact character varying(50) COLLATE pg_catalog."default",
+                    impact_v2_base_score numeric(4,2),
+                    CONSTRAINT UC_nvd_dv_item_cve_data_meta_id UNIQUE (item_cve_data_meta_id)
+                )
 
-    #with open(base_download_path + file_name + "-test.json", "w") as f:
-    #    f.write(df_concat.tail(1428).to_json(orient="records"))
+                TABLESPACE """ + params["tablespace"] + """;
 
-    df_concat = df_concat.reset_index(drop=True)
-    df_concat.index.name = "id"
+                ALTER TABLE IF EXISTS """ + params["schema"] + """.""" + params["target_table"] + """
+                    OWNER to """ + params["db_owner"] + """;
+            END IF;
+        END;
+        $$  
+    """)  
 
-    cursor.execute("""INSERT INTO public.nvd_import 
+    cnxn.commit()
+
+    cursor.execute("""DO $$
+        BEGIN
+            IF NOT EXISTS (SELECT * FROM 
+                        pg_tables
+                    WHERE 
+                        schemaname = '""" + params["schema"] + """' AND 
+                        tablename  = '""" + params["history_table"] + """') THEN
+            CREATE TABLE """ + params["schema"] + """.""" + params["history_table"] + """
+            (
+                """ + params["history_table"] + """_id INT GENERATED ALWAYS AS IDENTITY,
+                """ + params["target_table"] + """_id INT,
+                object_filename character varying(50) COLLATE pg_catalog."default",
+                object_download_datetime timestamp without time zone,
+                item_cve_data_type character varying(50) COLLATE pg_catalog."default",
+                item_cve_data_format character varying(50) COLLATE pg_catalog."default",
+                item_cve_data_version numeric(4,2),
+                item_cve_data_meta_id character varying(50) COLLATE pg_catalog."default",
+                item_cve_data_meta_assigner character varying(500) COLLATE pg_catalog."default",
+                item_cve_problemtype jsonb,
+                item_cve_references jsonb,
+                item_cve_primary_description character varying(8000) COLLATE pg_catalog."default",
+                item_cve_description jsonb,
+                item_configurations jsonb,
+                item_impact jsonb,
+                item_published_datetime timestamp without time zone,
+                item_modified_datetime timestamp without time zone,
+                impact_v3_exploitability_score numeric(4,2),
+                impact_v3_impact_score numeric(4,2),
+                impact_v3_version numeric(4,2),
+                impact_v3_vector_string character varying(50) COLLATE pg_catalog."default",
+                impact_v3_attack_vector character varying(50) COLLATE pg_catalog."default",
+                impact_v3_attack_complexity character varying(50) COLLATE pg_catalog."default",
+                impact_v3_privileges_required character varying(50) COLLATE pg_catalog."default",
+                impact_v3_user_interaction character varying(50) COLLATE pg_catalog."default",
+                impact_v3_scope character varying(50) COLLATE pg_catalog."default",
+                impact_v3_confidentiality_impact character varying(50) COLLATE pg_catalog."default",
+                impact_v3_integrity_impact character varying(50) COLLATE pg_catalog."default",
+                impact_v3_availability_impact character varying(50) COLLATE pg_catalog."default",
+                impact_v3_base_score numeric(4,2),
+                impact_v3_base_severity character varying(50) COLLATE pg_catalog."default",
+                impact_v2_severity character varying(50) COLLATE pg_catalog."default",
+                impact_v2_exploitability_score numeric(4,2),
+                impact_v2_impact_score numeric(4,2),
+                impact_v2_ac_insuf_info character varying(50) COLLATE pg_catalog."default",
+                impact_v2_obtain_all_privilege character varying(50) COLLATE pg_catalog."default",
+                impact_v2_obtain_user_privilege character varying(50) COLLATE pg_catalog."default",
+                impact_v2_obtain_other_privilege character varying(50) COLLATE pg_catalog."default",
+                impact_v2_user_interaction_required character varying(50) COLLATE pg_catalog."default",
+                impact_v2_version numeric(4,2),
+                impact_v2_vector_string character varying(50) COLLATE pg_catalog."default",
+                impact_v2_access_vector character varying(50) COLLATE pg_catalog."default",
+                impact_v2_access_complexity character varying(50) COLLATE pg_catalog."default",
+                impact_v2_authentication character varying(50) COLLATE pg_catalog."default",
+                impact_v2_confidentiality_impact character varying(50) COLLATE pg_catalog."default",
+                impact_v2_integrity_impact character varying(50) COLLATE pg_catalog."default",
+                impact_v2_availability_impact character varying(50) COLLATE pg_catalog."default",
+                impact_v2_base_score numeric(4,2)
+            )
+
+            TABLESPACE """ + params["tablespace"] + """;
+
+            ALTER TABLE IF EXISTS """ + params["schema"] + """.""" + params["history_table"] + """
+                OWNER to  """ + params["db_owner"] + """;
+            END IF;
+        END;
+        $$  
+    """)  
+
+    cnxn.commit()
+    cursor.close()     
+
+def snapshot_to_history(params):
+    cursor = cnxn.cursor()
+    cursor.execute("""
+        INSERT INTO """ + params["schema"] + """.""" + params["history_table"] + """ 
+                (""" + params["target_table"] + """_id
+                ,object_filename
+                ,object_download_datetime
+                ,item_cve_data_type
+                ,item_cve_data_format
+                ,item_cve_data_version
+                ,item_cve_data_meta_id
+                ,item_cve_data_meta_assigner
+                ,item_cve_problemtype
+                ,item_cve_references
+                ,item_cve_primary_description
+                ,item_cve_description
+                ,item_configurations
+                ,item_impact
+                ,item_published_datetime
+                ,item_modified_datetime
+                ,impact_v3_exploitability_score
+                ,impact_v3_impact_score
+                ,impact_v3_version
+                ,impact_v3_vector_string
+                ,impact_v3_attack_vector
+                ,impact_v3_attack_complexity
+                ,impact_v3_privileges_required
+                ,impact_v3_user_interaction
+                ,impact_v3_scope
+                ,impact_v3_confidentiality_impact
+                ,impact_v3_integrity_impact
+                ,impact_v3_availability_impact
+                ,impact_v3_base_score
+                ,impact_v3_base_severity
+                ,impact_v2_severity
+                ,impact_v2_exploitability_score
+                ,impact_v2_impact_score
+                ,impact_v2_ac_insuf_info
+                ,impact_v2_obtain_all_privilege
+                ,impact_v2_obtain_user_privilege
+                ,impact_v2_obtain_other_privilege
+                ,impact_v2_user_interaction_required
+                ,impact_v2_version
+                ,impact_v2_vector_string
+                ,impact_v2_access_vector
+                ,impact_v2_access_complexity
+                ,impact_v2_authentication
+                ,impact_v2_confidentiality_impact
+                ,impact_v2_integrity_impact
+                ,impact_v2_availability_impact
+                ,impact_v2_base_score)
+            SELECT * FROM """ + params["target_table"] + """;    
+    """)
+
+    cnxn.commit()
+    cursor.close()
+
+def upsert_data(params, df_import):
+    cursor = cnxn.cursor()
+    cursor.execute("""INSERT INTO """ + params["schema"] + "." + params["import_table"] + """
         SELECT j->>'object_filename' AS object_filename
         ,TO_TIMESTAMP(j->>'object_download_datetime', 'YYYY-MM-DD') AS object_download_datetime
         ,j->>'cve.data_type' AS item_cve_data_type
@@ -218,24 +443,207 @@ def import_feeds():
         ,j->>'impact.baseMetricV2.cvssV2.integrityImpact' AS impact_v2_integrity_impact
         ,j->>'impact.baseMetricV2.cvssV2.availabilityImpact' AS impact_v2_availability_impact
         ,CAST(NULLIF(j->>'impact.baseMetricV2.cvssV2.baseScore', '0.0') AS DECIMAL) AS impact_v2_base_score        
-        From JSON_ARRAY_ELEMENTS(?) AS j """, df_concat.to_json(orient="records"))
+        From JSON_ARRAY_ELEMENTS(?) AS j """, df_import.to_json(orient="records"))
 
     cnxn.commit()
-    cnxn.close()
+
+    cursor.execute("""
+        INSERT INTO """ + params["schema"] + "." + params["target_table"] + """ (object_filename
+                ,object_download_datetime
+                ,item_cve_data_type
+                ,item_cve_data_format
+                ,item_cve_data_version
+                ,item_cve_data_meta_id
+                ,item_cve_data_meta_assigner
+                ,item_cve_problemtype
+                ,item_cve_references
+                ,item_cve_primary_description
+                ,item_cve_description
+                ,item_configurations
+                ,item_impact
+                ,item_published_datetime
+                ,item_modified_datetime
+                ,impact_v3_exploitability_score
+                ,impact_v3_impact_score
+                ,impact_v3_version
+                ,impact_v3_vector_string
+                ,impact_v3_attack_vector
+                ,impact_v3_attack_complexity
+                ,impact_v3_privileges_required
+                ,impact_v3_user_interaction
+                ,impact_v3_scope
+                ,impact_v3_confidentiality_impact
+                ,impact_v3_integrity_impact
+                ,impact_v3_availability_impact
+                ,impact_v3_base_score
+                ,impact_v3_base_severity
+                ,impact_v2_severity
+                ,impact_v2_exploitability_score
+                ,impact_v2_impact_score
+                ,impact_v2_ac_insuf_info
+                ,impact_v2_obtain_all_privilege
+                ,impact_v2_obtain_user_privilege
+                ,impact_v2_obtain_other_privilege
+                ,impact_v2_user_interaction_required
+                ,impact_v2_version
+                ,impact_v2_vector_string
+                ,impact_v2_access_vector
+                ,impact_v2_access_complexity
+                ,impact_v2_authentication
+                ,impact_v2_confidentiality_impact
+                ,impact_v2_integrity_impact
+                ,impact_v2_availability_impact
+                ,impact_v2_base_score)
+        SELECT *
+        FROM """ + params["schema"] + "." + params["import_table"] + """ 
+        ON CONFLICT (item_cve_data_meta_id) DO UPDATE SET object_filename = EXCLUDED.object_filename
+            ,object_download_datetime = EXCLUDED.object_download_datetime
+            ,item_cve_data_type = EXCLUDED.item_cve_data_type
+            ,item_cve_data_format = EXCLUDED.item_cve_data_format
+            ,item_cve_data_version = EXCLUDED.item_cve_data_version
+            ,item_cve_data_meta_assigner = EXCLUDED.item_cve_data_meta_assigner
+            ,item_cve_problemtype = EXCLUDED.item_cve_problemtype
+            ,item_cve_references = EXCLUDED.item_cve_references
+            ,item_cve_primary_description = EXCLUDED.item_cve_primary_description
+            ,item_cve_description = EXCLUDED.item_cve_description
+            ,item_impact = EXCLUDED.item_impact
+            ,item_configurations = EXCLUDED.item_configurations
+            ,item_published_datetime = EXCLUDED.item_published_datetime
+            ,item_modified_datetime = EXCLUDED.item_modified_datetime
+            ,impact_v3_exploitability_score = EXCLUDED.impact_v3_exploitability_score
+            ,impact_v3_impact_score = EXCLUDED.impact_v3_impact_score
+            ,impact_v3_version = EXCLUDED.impact_v3_version
+            ,impact_v3_vector_string = EXCLUDED.impact_v3_vector_string
+            ,impact_v3_attack_vector = EXCLUDED.impact_v3_attack_vector
+            ,impact_v3_attack_complexity = EXCLUDED.impact_v3_attack_complexity
+            ,impact_v3_privileges_required = EXCLUDED.impact_v3_privileges_required
+            ,impact_v3_user_interaction = EXCLUDED.impact_v3_user_interaction
+            ,impact_v3_scope = EXCLUDED.impact_v3_scope
+            ,impact_v3_confidentiality_impact = EXCLUDED.impact_v3_confidentiality_impact
+            ,impact_v3_integrity_impact = EXCLUDED.impact_v3_integrity_impact
+            ,impact_v3_availability_impact = EXCLUDED.impact_v3_availability_impact
+            ,impact_v3_base_score = EXCLUDED.impact_v3_base_score
+            ,impact_v3_base_severity = EXCLUDED.impact_v3_base_severity
+            ,impact_v2_severity = EXCLUDED.impact_v2_severity
+            ,impact_v2_exploitability_score = EXCLUDED.impact_v2_exploitability_score
+            ,impact_v2_impact_score = EXCLUDED.impact_v2_impact_score
+            ,impact_v2_ac_insuf_info = EXCLUDED.impact_v2_ac_insuf_info
+            ,impact_v2_obtain_all_privilege = EXCLUDED.impact_v2_obtain_all_privilege
+            ,impact_v2_obtain_user_privilege = EXCLUDED.impact_v2_obtain_user_privilege
+            ,impact_v2_obtain_other_privilege = EXCLUDED.impact_v2_obtain_other_privilege
+            ,impact_v2_user_interaction_required = EXCLUDED.impact_v2_user_interaction_required
+            ,impact_v2_version = EXCLUDED.impact_v2_version
+            ,impact_v2_vector_string = EXCLUDED.impact_v2_vector_string
+            ,impact_v2_access_vector = EXCLUDED.impact_v2_access_vector
+            ,impact_v2_access_complexity = EXCLUDED.impact_v2_access_complexity
+            ,impact_v2_authentication = EXCLUDED.impact_v2_authentication
+            ,impact_v2_confidentiality_impact = EXCLUDED.impact_v2_confidentiality_impact
+            ,impact_v2_integrity_impact = EXCLUDED.impact_v2_integrity_impact
+            ,impact_v2_availability_impact = EXCLUDED.impact_v2_availability_impact
+            ,impact_v2_base_score = EXCLUDED.impact_v2_base_score;    
+    """)
+
+    cnxn.commit()
+
+    cursor.execute("TRUNCATE TABLE " + params["schema"] + "." + params["import_table"] + ";")
+
+    cnxn.commit()
+    cursor.close()
+
+def download_feeds():
+    params = {}
+    if import_after_download:
+        params = fill_params("both")
+    else:
+        params = fill_params("download")    
+
+    os.makedirs(os.path.dirname(params["base_download_path"]), exist_ok=True)
+    if not incremental:
+        for year in years:
+            file_name = params["file_prefix"] + str(year) + params["file_suffix"]
+            download_file(params["base_url"], params["base_download_path"], file_name)
+
+    file_name = params["file_prefix"] + "recent" + params["file_suffix"]
+    download_file(params["base_url"], params["base_download_path"], file_name)
+
+    file_name = params["file_prefix"] + "modified" + params["file_suffix"]
+    download_file(params["base_url"], params["base_download_path"], file_name)
+
+    if import_after_download:
+        import_feeds()
+
+def import_feeds():
+    params = {}
+    if download_before_import:
+        download_feeds()
+        params = fill_params("both")
+    else:
+        params = fill_params("import")
+
+    conditional_create_clean_tables(params)
+
+    if not exclude_history:
+        snapshot_to_history(params)
+
+    df_import = pd.DataFrame()
+
+    if not incremental:
+        for year in years:
+            file_name = params["file_prefix"] + str(year) + params["file_suffix"]
+            df_import = pd.concat([
+                df_import, 
+                parse_normalize_json(params["base_download_path"], file_name)
+            ])
+            upsert_data(params, df_import)
+
+    file_name = params["file_prefix"] + "recent" + params["file_suffix"]
+    df_import = parse_normalize_json(params["base_download_path"], file_name)
+    upsert_data(params, df_import)
+
+    file_name = params["file_prefix"] + "modified" + params["file_suffix"]
+    df_import = parse_normalize_json(params["base_download_path"], file_name)
+    upsert_data(params, df_import)
+
+    df_import = df_import.reset_index(drop=True)
+    df_import.index.name = "id"
+
+    if delete_downloads:
+        delete_files(params)
 
 if __name__ == "__main__":
     try:
-        params = {}
+        cnxn_str = (
+            "DRIVER={PostgreSQL UNICODE};"
+            "DATABASE=nvd;"
+            "UID=nvd_importer;"
+            "PWD=<pass>;"
+            "SERVER=172.25.6.127;"
+            "PORT=5432;"
+            )
+        cnxn = pyodbc.connect(cnxn_str)
+        cnxn.setencoding(encoding='utf-8')
+        cnxn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
+        cnxn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
+        years = list(range(2002, datetime.date.today().year+1))
         input_response = ""
         use_defaults = False
         incremental = False
+        import_after_download = False
+        download_before_import = False
+        exclude_history = False        
+        delete_downloads = False
         if args.task_type == "download":
-  #          if args.download_action:
+            use_defaults = args.download_defaults
             incremental = args.incremental
+            import_after_download = args.import_after_download
+            exclude_history = args.exclude_history
+            delete_downloads = args.delete_downloads
         elif args.task_type == "import":
- #           if args.import_action:
-            use_defaults = args.defaults
+            use_defaults = args.import_defaults
             incremental = args.incremental
+            download_before_import = args.download_before_import
+            exclude_history = args.exclude_history
+            delete_downloads = args.delete_downloads
         else:
             print("Missing task type or sub-command for help use -h or --help!")
         
@@ -249,3 +657,5 @@ if __name__ == "__main__":
     except Exception as e:
         # TODO: add logging code
         raise
+    finally:
+        cnxn.close()

@@ -123,6 +123,7 @@ DECLARE @query_part_2 nvarchar(MAX) = N'
       ,[item_modified_datetime]
 	  ,[impact_v3_exploitability_score]
       ,[impact_v3_impact_score]
+      ,[impact_v3_ac_insuf_info]
       ,[impact_v3_version]
       ,[impact_v3_vector_string]
       ,[impact_v3_attack_vector]
