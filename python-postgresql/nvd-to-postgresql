@@ -617,7 +617,7 @@ if __name__ == "__main__":
             "DATABASE=nvd;"
             "UID=nvd_importer;"
             "PWD=<pass>;"
-            "SERVER=172.25.6.127;"
+            "SERVER=localhost;"
             "PORT=5432;"
             )
         cnxn = pyodbc.connect(cnxn_str)
